@@ -1,9 +1,16 @@
 from fastapi import FastAPI, UploadFile, File
 from typing import List, Annotated
 from app.services.ingestion import indexing_documents
-from app.services.rag import ask_documents
-    
+# from app.services.rag import ask_documents
+from pathlib import Path
+import hashlib
+from app.services.document_registry import create_documents_table, get_all_documents,get_document_by_hash
+
 app = FastAPI()
+
+@app.on_event("startup")
+def startup():
+    create_documents_table()
 
 @app.get("/")
 def root():
@@ -15,21 +22,80 @@ def health_check():
 
 @app.get("/documents")
 def list_documents():
-    return {"documents": ["doc1","doc2","doc3"]}
-
-
+    return {"documents": get_all_documents()}
 
 @app.post("/documents/ingest", status_code=201)
-async def ingest_documents(files: Annotated[List[UploadFile], File(description="Upload multiple files")]):
-    results = []
-    for file in files:
-        content = await file.read()
-        with open(file.filename, "wb") as f:
-            f.write(content)
-        results.append({"filename": file.filename, "size": len(content)})
-    return indexing_documents(results)
+async def ingest_documents(
+    files: Annotated[List[UploadFile], File(description="Upload PDF, TXT, or Markdown files")]
+    ):
 
-@app.post("/query")
-def ask_query(user_query):
-    return ask_documents(user_query)
+    upload_folder = Path("data/uploads")
+    upload_folder.mkdir(parents=True, exist_ok=True)
+
+    skipped_files = []
+    files_to_index = []
+    hashes_in_this_request = set()
+
+    for file in files:
+
+        suffix = Path(file.filename).suffix.lower()
+        if not file.filename or suffix not in {".pdf", ".txt", ".md"}:
+            skipped_files.append({
+                "status": "rejected",
+                "filename": file.filename,
+                "detail": "Only PDF, TXT, and Markdown files are supported."
+            })
+            continue
+
+        content = await file.read()
+        if not content:
+            skipped_files.append({
+                "status": "rejected",
+                "filename": file.filename,
+                "detail": "The upload file is empty."
+            })
+            continue
+        
+        content_hash = hashlib.sha256(content).hexdigest()
+
+        if content_hash in hashes_in_this_request:
+            skipped_files.append({
+                "status": "already_indexed",
+                "filename": file.filename,
+                "detail": "This same file was included earlier in this upload."
+            })
+            continue
+
+        existing_document = get_document_by_hash(content_hash)
+
+        if existing_document:
+            skipped_files.append({
+                "status": "already_indexed",
+                "filename": file.filename,
+                "document_id": existing_document["id"]
+            })
+            continue
+
+        safe_filename = Path(file.filename).name
+        file_path = upload_folder / safe_filename
+
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        files_to_index.append({
+            "filename": file.filename,
+            "path":file_path, 
+            "size": len(content),
+            "content_hash":content_hash
+        })
+
+    indexing_results = indexing_documents(files_to_index)
+
+    return {
+        "documents": skipped_files + indexing_results
+    }
+
+# @app.post("/query")
+# def ask_query(user_query):
+#     return ask_documents(user_query)
 
