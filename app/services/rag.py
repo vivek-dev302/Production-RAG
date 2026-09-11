@@ -6,7 +6,7 @@ from dotenv import load_dotenv, find_dotenv
 from langchain_qdrant import QdrantVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-
+from app.services.bm25_service import find_closest_chunks_bm25
 
 load_dotenv(find_dotenv())
 
@@ -77,6 +77,7 @@ def ask_documents(user_query):
     is_cited = False
     top_k = os.getenv("TOP_K")
     search_results = vector_db.similarity_search(query=user_query,k=top_k)
+    top_bm25_chunks = find_closest_chunks_bm25(user_query,top_k)
 
     context = "\n\n\n".join([
         f"Document Title: {result.metadata['source']}\nPage Number: {result.metadata['page_label']}\nPage Content: {result.page_content}"

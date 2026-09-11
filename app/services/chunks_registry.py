@@ -18,7 +18,7 @@ def create_chunks_table():
             page_label TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
-            UNIQUE(document_id, chunk_index)
+            UNIQUE(document_id, chunk_index),
             FOREIGN KEY (document_id) REFERENCES documents(id)
         )
     """)
@@ -47,8 +47,16 @@ def get_all_chunks():
     connection.row_factory = sqlite3.Row
 
     rows = connection.execute("""
-        SELECT * FROM chunks
-        ORDER BY created_at DESC
+        SELECT
+            chunks.id AS chunk_id,
+            chunks.document_id,
+            chunks.chunk_index,
+            chunks.page_content,
+            chunks.page_label,
+            documents.filename
+        FROM chunks
+        JOIN documents ON chunks.document_id = documents.id
+        ORDER BY chunks.id
     """).fetchall()
 
     connection.close()
