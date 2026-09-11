@@ -1,7 +1,8 @@
 from fastapi import FastAPI, UploadFile, File
 from typing import List, Annotated
 from app.services.ingestion import indexing_documents
-# from app.services.rag import ask_documents
+from app.services.rag import ask_documents
+from app.services.chunks_registry import create_chunks_table
 from pathlib import Path
 import hashlib
 from app.services.document_registry import create_documents_table, get_all_documents,get_document_by_hash
@@ -11,6 +12,7 @@ app = FastAPI()
 @app.on_event("startup")
 def startup():
     create_documents_table()
+    create_chunks_table()
 
 @app.get("/")
 def root():
@@ -76,6 +78,8 @@ async def ingest_documents(
             })
             continue
 
+        hashes_in_this_request.add(content_hash)
+        
         safe_filename = Path(file.filename).name
         file_path = upload_folder / safe_filename
 

@@ -28,7 +28,7 @@ def create_documents_table():
 def add_document(filename, file_path, file_type, size_bytes, chunk_count,content_hash):
     connection = sqlite3.connect(DB_PATH)
 
-    connection.execute("""
+    cursor = connection.execute("""
         INSERT INTO documents (
             filename, file_path, file_type, size_bytes, chunk_count,content_hash
         )
@@ -36,7 +36,10 @@ def add_document(filename, file_path, file_type, size_bytes, chunk_count,content
     """, (filename, file_path, file_type, size_bytes, chunk_count,content_hash))
 
     connection.commit()
+    document_id = cursor.lastrowid
     connection.close()
+
+    return document_id
 
 def get_all_documents():
     connection = sqlite3.connect(DB_PATH)

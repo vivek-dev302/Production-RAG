@@ -6,6 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from app.services.document_registry import add_document
+from app.services.chunks_registry import add_chunks
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
 load_dotenv()
@@ -59,7 +60,7 @@ def indexing_documents(files):
 
             print("adding document in sqlite")
             # This runs only when Qdrant indexing succeeded.
-            add_document(
+            document_id = add_document(
                 filename=file["filename"],
                 file_path=str(file["path"]),
                 file_type=Path(file["path"]).suffix,
@@ -68,6 +69,8 @@ def indexing_documents(files):
                 content_hash=file["content_hash"]
             )
 
+            add_chunks(document_id,chunks)
+            
             results.append({
                 "status": "indexed",
                 "filename": file["filename"],
