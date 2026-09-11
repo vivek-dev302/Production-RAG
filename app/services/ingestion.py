@@ -10,7 +10,8 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
 load_dotenv()
 
-text_splitter = RecursiveCharacterTextSplitter(
+text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+    encoding_name="cl100k_base",
     chunk_size = 650,
     chunk_overlap=100 
 )
