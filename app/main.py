@@ -6,6 +6,7 @@ from app.services.chunks_registry import create_chunks_table
 from pathlib import Path
 import hashlib
 from app.services.document_registry import create_documents_table, get_all_documents,get_document_by_hash
+from app.schemas import QueryRequest
 
 app = FastAPI()
 
@@ -99,7 +100,6 @@ async def ingest_documents(
         "documents": skipped_files + indexing_results
     }
 
-# @app.post("/query")
-# def ask_query(user_query):
-#     return ask_documents(user_query)
-
+@app.post("/query")
+def ask_query(query: QueryRequest):
+    return ask_documents(query.question)
