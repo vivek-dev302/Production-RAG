@@ -13,6 +13,14 @@ from app.services.reranker_service import rerank_chunks
 
 load_dotenv(find_dotenv())
 
+PROMPT_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "prompts"
+    / "answer_prompt.txt"
+)
+
+PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8")
+
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.5-flash",
     google_api_key=os.getenv("GEMINI_API_KEY"),
@@ -57,20 +65,27 @@ def verify_citations(response_dict, top_chunks):
         normalized_citation = normalize_text(cited_text)
 
         match_found = False
-        for chunk in normalized_chunks:
+        for index, chunk in enumerate(normalized_chunks):
             print(f"Normalized chunk: {chunk}\nNormalized citation: {normalized_citation}\n")
 
             # Check if the normalized citation is a substring of the normalized chunk
             if normalized_citation in chunk:
-                match_found = True
-                break
+
+                file_match = top_chunks[index].get('filename') == citation.get('title')
+                page_match = (str(top_chunks[index].get("page_label")) == str(citation.get("page")))
+                if file_match and page_match:
+                    match_found = True
+                    break
 
             # If not an exact match, use fuzzy matching as a fallback
             score = fuzz.partial_ratio(normalized_citation, chunk)
 
             if score >= 95:
-                match_found = True
-                break
+                file_match = top_chunks[index].get('filename') == citation.get('title')
+                page_match = (str(top_chunks[index].get("page_label")) == str(citation.get("page")))
+                if file_match and page_match:
+                    match_found = True
+                    break
 
         matches.append(match_found)
 
@@ -85,6 +100,7 @@ def ask_documents(user_query):
     vector_results = vector_db.similarity_search_with_score(
         query=user_query,
         k=retrieval_top_k,
+        score_threshold=0.75
     )
     top_vector_chunks = []
 
@@ -125,6 +141,16 @@ def ask_documents(user_query):
             "is_cited": False,
         }
 
+    best_reranker_score = top_chunks[0]["reranker_score"]
+
+    if best_reranker_score < 0:
+        return {
+            "status": "insufficient_evidence",
+            "response": "I do not have enough evidence in the uploaded documents to answer that question.",
+            "citations": [],
+            "is_cited": False,
+        }
+
     context = "\n\n\n".join([
         f"Document Title: {chunk['filename']}\n"
         f"Page Number: {chunk['page_label']}\n"
@@ -132,77 +158,7 @@ def ask_documents(user_query):
         for chunk in top_chunks
     ])
 
-    SYSTEM_PROMPT = f"""You are a research assistant. Use the provided document snippets to
-    answer the query. Format your response with citations in structured JSON format:
-
-    response format:
-    {{
-        "status": "status of query response",
-        "response": "Your response here.",
-        "citations": [
-            {{
-                "citation_id": id of the citation mention in response,
-                "title": "Document Title",
-                "page": page number of the document,
-                "snippet": "Exact snippet from the document"
-            }}
-        ]
-    }}
-
-    IMPORTANT CITATION RULES:
-    1. Each citation MUST be a complete sentence or phrase from the original text.
-    2. Citations MUST be VERBATIM and EXACT quotes from the provided documents.
-    3. DO NOT use ellipses ( ... ) or any other shortening techniques in citations.
-    4. DO NOT paraphrase or modify the original text in any way for citations.
-    5. If you need to use multiple sentences in a citation, include them in full.
-    6. Use MULTIPLE citations when necessary to fully support your response.
-    7. Ensure that each citation DIRECTLY supports a specific part of your response.
-    8. If you.cannot find relevant information in the provided documents, state this clearly in your
-    response.
-
-    Example of a correct response with multiple, relevant citations:
-    {{
-        "status": "answered",
-        "response": "The mockingbird has unique vocal .abilities . [1]. It uses these abilities for
-        various purposes, including defending its territory [2].",
-        "citations": [
-            {{  
-                "citation_id": 1,
-                "title": "Mockingbird Study",
-                "page": 4,
-                "snippet": "The mockingbird is known for its ability to mimic the calls of other \n birds and even mechanical sounds."
-            }},
-            {{
-                "citation_id": 2,
-                "title": "Mockingbird Behavior",
-                "page": 2,
-                "snippet": "Mockingbirds use their diverse vocal repertoire to defend their \n territories from intruders and to attract mates."
-            }}
-        ]
-    }}
-
-    Example of a response with insufficient evidence
-    {{
-        "status": "insufficient_evidence",
-        "response": "I do not have enough evidence in the uploaded documents to answer that question.",
-        "citations": []
-    }}
-
-    Here are the relevant documents for your query:
-    {context} 
-
-    Remember:
-    1. Citations must be EXACT, COMPLETE sentences or phrases from the provided text.
-    2. Do not modify, shorten, or paraphrase the original text in your citations.
-    3. Use multiple citations when necessary to fully support your response.
-    4. Ensure each citation is directly relevant to the part of your response it supports.
-    5. If you cannot find relevant information in the provided documents, clearly state this in your
-    response.
-    6. only respond in valid json format no text before or after strictly follow json schema 
-
-    Now, please answer the given query using the provided information and following these guidelines
-
-    """
+    SYSTEM_PROMPT = PROMPT_PATH.replace("{context}",context)
 
     max_checks = 3
     messages = [
