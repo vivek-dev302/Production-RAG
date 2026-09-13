@@ -6,7 +6,13 @@ from app.services.chunks_registry import create_chunks_table
 from pathlib import Path
 import hashlib
 from app.services.document_registry import create_documents_table, get_all_documents,get_document_by_hash
-from app.schemas import QueryRequest
+from app.schemas import (
+    DocumentListResponse,
+    IngestionResponse,
+    QueryRequest,
+    QueryResponse,
+)
+
 
 app = FastAPI()
 
@@ -23,13 +29,14 @@ def root():
 def health_check():
     return {"health": "ok"}
 
-@app.get("/documents")
+@app.get("/documents",response_model=DocumentListResponse)
 def list_documents():
     return {"documents": get_all_documents()}
 
-@app.post("/documents/ingest", status_code=201)
+@app.post("/documents/ingest", status_code=201,response_model=IngestionResponse)
 async def ingest_documents(
-    files: Annotated[List[UploadFile], File(description="Upload PDF, TXT, or Markdown files")]
+    files: Annotated[List[UploadFile], 
+    File(description="Upload PDF, TXT, or Markdown files")]
     ):
 
     upload_folder = Path("data/uploads")
@@ -100,6 +107,6 @@ async def ingest_documents(
         "documents": skipped_files + indexing_results
     }
 
-@app.post("/query")
+@app.post("/query",response_model=QueryResponse)
 def ask_query(query: QueryRequest):
     return ask_documents(query.question)
