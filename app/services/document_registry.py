@@ -69,3 +69,14 @@ def get_document_by_hash(content_hash):
         return None
 
     return dict(row)
+
+def delete_document(document_id):
+    connection = sqlite3.connect(DB_PATH)
+
+    connection.execute("""
+        DELETE FROM documents
+        WHERE id = ?
+    """, (document_id,))
+
+    connection.commit()
+    connection.close()

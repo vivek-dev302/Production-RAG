@@ -5,8 +5,8 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
-from app.services.document_registry import add_document
-from app.services.chunks_registry import add_chunks
+from app.services.document_registry import add_document, delete_document
+from app.services.chunks_registry import add_chunks, delete_chunks_by_document_id
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
 load_dotenv()
@@ -33,12 +33,13 @@ def indexing_documents(files):
     results = []
 
     for file in files:
+        document_id = None
+
         try:
             print("loading document")
             docs = load_file(file["path"])
 
             print("chunking...")
-
             chunks = text_splitter.split_documents(docs)
 
             if not chunks:
@@ -49,17 +50,7 @@ def indexing_documents(files):
                 })
                 continue
 
-            print("attempting to store chunks")
-            QdrantVectorStore.from_documents(
-                documents=chunks,
-                embedding=embedding_model,
-                url=os.getenv("QDRANT_URL"),
-                api_key=os.getenv("QDRANT_API_KEY"),
-                collection_name=os.getenv("QDRANT_COLLECTION")
-            )
-
             print("adding document in sqlite")
-            # This runs only when Qdrant indexing succeeded.
             document_id = add_document(
                 filename=file["filename"],
                 file_path=str(file["path"]),
@@ -69,7 +60,22 @@ def indexing_documents(files):
                 content_hash=file["content_hash"]
             )
 
-            add_chunks(document_id,chunks)
+            chunk_ids = add_chunks(document_id,chunks)
+
+            for chunk_index, (chunk, chunk_id) in enumerate(zip(chunks, chunk_ids)):
+                chunk.metadata["chunk_id"] = chunk_id
+                chunk.metadata["document_id"] = document_id
+                chunk.metadata["chunk_index"] = chunk_index
+                chunk.metadata["filename"] = file["filename"]
+
+            print("attempting to store chunks")
+            QdrantVectorStore.from_documents(
+                documents=chunks,
+                embedding=embedding_model,
+                url=os.getenv("QDRANT_URL"),
+                api_key=os.getenv("QDRANT_API_KEY"),
+                collection_name=os.getenv("QDRANT_COLLECTION")
+            )
             
             results.append({
                 "status": "indexed",
@@ -78,6 +84,10 @@ def indexing_documents(files):
             })
 
         except Exception as error:
+            if document_id is not None:
+                delete_chunks_by_document_id(document_id)
+                delete_document(document_id)
+                
             results.append({
                 "status": "failed",
                 "filename": file["filename"],

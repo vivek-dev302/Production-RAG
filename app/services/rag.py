@@ -106,12 +106,12 @@ def ask_documents(user_query):
 
     for document, score in vector_results:
         top_vector_chunks.append({
-            "chunk_id": None,
-            "document_id": None,
-            "chunk_index": None,
-            "page_content": document.page_content,
+            "chunk_id": document.metadata.get("chunk_id"),
+            "document_id": document.metadata.get("document_id"),
+            "chunk_index": document.metadata.get("chunk_index"),
+            "filename": document.metadata.get("filename"),
             "page_label": document.metadata.get("page_label"),
-            "filename": Path(document.metadata.get("source", "")).name,
+            "page_content": document.page_content,
             "vector_score": float(score)
         })
 
@@ -158,7 +158,7 @@ def ask_documents(user_query):
         for chunk in top_chunks
     ])
 
-    SYSTEM_PROMPT = PROMPT_PATH.replace("{context}",context)
+    SYSTEM_PROMPT = PROMPT_TEMPLATE.replace("{context}",context)
 
     max_checks = 3
     messages = [

@@ -29,18 +29,24 @@ def create_chunks_table():
 def add_chunks(document_id,chunks):
     connection = sqlite3.connect(DB_PATH)
 
+    chunk_ids = []
+
     for index, chunk in enumerate(chunks):
         page_label = chunk.metadata.get("page_label")
 
-        connection.execute("""
+        cursor = connection.execute("""
             INSERT INTO chunks (
                 document_id, chunk_index, page_content, page_label
             )
             VALUES (?, ?, ?, ?)
         """, (document_id, index, chunk.page_content, page_label))
 
+        chunk_ids.append(cursor.lastrowid)
+
     connection.commit()
     connection.close()
+
+    return chunk_ids
 
 def get_all_chunks():
     connection = sqlite3.connect(DB_PATH)
@@ -78,3 +84,14 @@ def get_chunks_by_document_id(document_id):
         return None
 
     return [dict(row) for row in rows]
+
+def delete_chunks_by_document_id(document_id):
+    connection = sqlite3.connect(DB_PATH)
+
+    connection.execute("""
+        DELETE FROM chunks
+        WHERE document_id = ?
+    """, (document_id,))
+
+    connection.commit()
+    connection.close()
