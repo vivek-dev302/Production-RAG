@@ -91,8 +91,9 @@ def verify_citations(response_dict, top_chunks):
 
     return all(matches),citations
 
-def ask_documents(user_query):
-    is_cited = False
+
+def retrieve_chunks(user_query):
+
     retrieval_top_k = 6
 
     top_bm25_chunks = find_closest_chunks_bm25(user_query, retrieval_top_k)
@@ -132,6 +133,12 @@ def ask_documents(user_query):
         chunks=list(unique_chunks.values()),
         top_k=3,
     )
+
+    return top_chunks
+
+def ask_documents(user_query):
+    is_cited = False
+    top_chunks = retrieve_chunks(user_query)
 
     if not top_chunks:
         return {
