@@ -1,14 +1,13 @@
 import os
 import json
-import re
 import hashlib
 from pathlib import Path
-from rapidfuzz import fuzz
 from dotenv import load_dotenv, find_dotenv
 from langchain_qdrant import QdrantVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.services.bm25_service import find_closest_chunks_bm25
+from app.services.citation_service import verify_citations
 from app.services.reranker_service import rerank_chunks
 
 load_dotenv(find_dotenv())
@@ -38,59 +37,6 @@ vector_db = QdrantVectorStore.from_existing_collection(
     api_key=os.getenv("QDRANT_API_KEY"),
     collection_name = os.getenv("QDRANT_COLLECTION")
 )
-
-def normalize_text(text):
-    # Convert to lowercase, remove punctuation, and normalize whitespace
-    text = re.sub(r'[^\w\s]', '', text. lower())
-    return ' '.join(text.split())
-
-def verify_citations(response_dict, top_chunks):
-    citations = response_dict.get("citations", [])
-
-    if not citations:
-        print("Error: No citations found in the response.")
-        return False, []
-
-    matches = []
-    normalized_chunks = [normalize_text(chunk["page_content"]) for chunk in top_chunks]
-
-    for citation in citations:
-        cited_text = citation.get("snippet", "")
-        if not cited_text:
-            print(f"Error: Missing snippet in citation: {citation}")
-            matches.append(False)
-            continue
-
-        # Normalize the entire citation
-        normalized_citation = normalize_text(cited_text)
-
-        match_found = False
-        for index, chunk in enumerate(normalized_chunks):
-            print(f"Normalized chunk: {chunk}\nNormalized citation: {normalized_citation}\n")
-
-            # Check if the normalized citation is a substring of the normalized chunk
-            if normalized_citation in chunk:
-
-                file_match = top_chunks[index].get('filename') == citation.get('title')
-                page_match = (str(top_chunks[index].get("page_label")) == str(citation.get("page")))
-                if file_match and page_match:
-                    match_found = True
-                    break
-
-            # If not an exact match, use fuzzy matching as a fallback
-            score = fuzz.partial_ratio(normalized_citation, chunk)
-
-            if score >= 95:
-                file_match = top_chunks[index].get('filename') == citation.get('title')
-                page_match = (str(top_chunks[index].get("page_label")) == str(citation.get("page")))
-                if file_match and page_match:
-                    match_found = True
-                    break
-
-        matches.append(match_found)
-
-    return all(matches),citations
-
 
 def retrieve_chunks(user_query):
 

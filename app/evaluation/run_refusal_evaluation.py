@@ -19,7 +19,7 @@ def run_evaluation() -> None:
     if REPORT_PATH.exists():
         report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
     else:
-        report = {"metrics": {}, "refusal_results": []}
+        report = {"metrics": {}, "refusal_results+": []}
 
     report["run_status"] = "in_progress"
 
