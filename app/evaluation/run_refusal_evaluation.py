@@ -8,6 +8,21 @@ from app.services.rag import ask_documents
 DATASET_PATH = Path("data/evaluation/golden_dataset.json")
 REPORT_PATH = Path("data/evaluation/results/refusal_report.json")
 
+
+def evaluate_refusal_case(item, response, elapsed_seconds):
+    correct_refusal = response.get("status") == "insufficient_evidence"
+
+    return {
+        "id": item["id"],
+        "difficulty": item.get("difficulty"),
+        "question": item["question"],
+        "expected_status": "insufficient_evidence",
+        "actual_status": response.get("status"),
+        "correct_refusal": correct_refusal,
+        "elapsed_seconds": round(elapsed_seconds, 3),
+    }
+
+
 def save_report(report: dict) -> None:
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -19,7 +34,7 @@ def run_evaluation() -> None:
     if REPORT_PATH.exists():
         report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
     else:
-        report = {"metrics": {}, "refusal_results+": []}
+        report = {"metrics": {}, "refusal_results": []}
 
     report["run_status"] = "in_progress"
 
@@ -47,18 +62,9 @@ def run_evaluation() -> None:
             print(f"[STOPPED] {item['id']}: {error}")
             break
 
-        correct_refusal = response.get("status") == "insufficient_evidence"
+        result = evaluate_refusal_case(item, response, elapsed_seconds)
+        correct_refusal = result["correct_refusal"]
         status = "PASS" if correct_refusal else "FAIL"
-
-        result = {
-            "id": item["id"],
-            "difficulty": item.get("difficulty"),
-            "question": item["question"],
-            "expected_status": "insufficient_evidence",
-            "actual_status": response.get("status"),
-            "correct_refusal": correct_refusal,
-            "elapsed_seconds": round(elapsed_seconds, 3),
-        }
 
         report["refusal_results"].append(result)
         save_report(report)

@@ -6,23 +6,44 @@ from app.services.rag import retrieve_chunks
 
 REPORT_PATH = Path("data/evaluation/results/retrieval_report.json")
 
-if REPORT_PATH.exists():
-    report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
-else:
-    report = {
-        "run_status": "in_progress",
-        "metrics": {},
-        "results": []
-    }
-
-completed_ids = {
-    result["id"]
-    for result in report["results"]
-}
-
 DATASET_PATH = Path("data/evaluation/golden_dataset.json")
 
+
+def evaluate_retrieval_case(item, top_chunks, elapsed_seconds):
+    expected_chunk_ids = {
+        source["chunk_id"]
+        for source in item["expected_sources"]
+    }
+    retrieved_chunk_ids = {
+        chunk["chunk_id"]
+        for chunk in top_chunks
+        if chunk.get("chunk_id") is not None
+    }
+
+    return {
+        "id": item["id"],
+        "question": item["question"],
+        "expected_chunk_ids": sorted(expected_chunk_ids),
+        "retrieved_chunk_ids": sorted(retrieved_chunk_ids),
+        "passed": bool(expected_chunk_ids & retrieved_chunk_ids),
+        "elapsed_seconds": round(elapsed_seconds, 3),
+    }
+
+
 def run_evaluation():
+    if REPORT_PATH.exists():
+        report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
+    else:
+        report = {
+            "run_status": "in_progress",
+            "metrics": {},
+            "results": [],
+        }
+
+    completed_ids = {
+        result["id"]
+        for result in report["results"]
+    }
 
     dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
 
@@ -45,18 +66,10 @@ def run_evaluation():
 
         elapsed_seconds = perf_counter() - start_time
 
-        expected_chunk_ids = {
-            source["chunk_id"]
-            for source in item["expected_sources"]
-        }
-
-        retrieved_chunk_ids = {
-            chunk["chunk_id"]
-            for chunk in top_chunks
-            if chunk.get("chunk_id") is not None
-        }
-
-        is_pass = bool(expected_chunk_ids & retrieved_chunk_ids)
+        result = evaluate_retrieval_case(item, top_chunks, elapsed_seconds)
+        expected_chunk_ids = result["expected_chunk_ids"]
+        retrieved_chunk_ids = result["retrieved_chunk_ids"]
+        is_pass = result["passed"]
 
         if is_pass:
             passed += 1
@@ -69,15 +82,6 @@ def run_evaluation():
         print(f"Expected chunk IDs: {sorted(expected_chunk_ids)}")
         print(f"Retrieved chunk IDs: {sorted(retrieved_chunk_ids)}")
         print()
-
-        result = {
-            "id" : item['id'],
-            "question" : item['question'],
-            "expected_chunk_ids" : sorted(expected_chunk_ids),
-            "retrieved_chunk_ids" : sorted(retrieved_chunk_ids),
-            "passed" : is_pass,
-            "elapsed_seconds": round(elapsed_seconds, 3)
-        }
 
         report["results"].append(result)
 

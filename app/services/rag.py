@@ -82,9 +82,8 @@ def retrieve_chunks(user_query):
 
     return top_chunks
 
-def ask_documents(user_query):
+def answer_from_chunks(user_query, top_chunks):
     is_cited = False
-    top_chunks = retrieve_chunks(user_query)
 
     if not top_chunks:
         return {
@@ -186,4 +185,9 @@ def ask_documents(user_query):
         "citations": [],
         "is_cited": False,
     }
+
+
+def ask_documents(user_query):
+    top_chunks = retrieve_chunks(user_query)
+    return answer_from_chunks(user_query, top_chunks)
 

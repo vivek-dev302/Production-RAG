@@ -9,6 +9,26 @@ DATASET_PATH = Path("data/evaluation/golden_dataset.json")
 REPORT_PATH = Path("data/evaluation/results/citation_report.json")
 
 
+def evaluate_citation_case(item, response, elapsed_seconds):
+    citations = response.get("citations", [])
+    citation_valid = (
+        response.get("status") == "answered"
+        and response.get("is_cited") is True
+        and len(citations) > 0
+    )
+
+    return {
+        "id": item["id"],
+        "question": item["question"],
+        "expected_status": "answered",
+        "actual_status": response.get("status"),
+        "is_cited": response.get("is_cited", False),
+        "citation_count": len(citations),
+        "citation_valid": citation_valid,
+        "elapsed_seconds": round(elapsed_seconds, 3),
+    }
+
+
 def save_report(report: dict) -> None:
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -48,31 +68,16 @@ def run_evaluation() -> None:
             print(f"[STOPPED] {item['id']}: {error}")
             break
 
-        citations = response.get("citations", [])
-        citation_valid = (
-            response.get("status") == "answered"
-            and response.get("is_cited") is True
-            and len(citations) > 0
-        )
+        result = evaluate_citation_case(item, response, elapsed_seconds)
+        citation_valid = result["citation_valid"]
         status = "PASS" if citation_valid else "FAIL"
-
-        result = {
-            "id": item["id"],
-            "question": item["question"],
-            "expected_status": "answered",
-            "actual_status": response.get("status"),
-            "is_cited": response.get("is_cited", False),
-            "citation_count": len(citations),
-            "citation_valid": citation_valid,
-            "elapsed_seconds": round(elapsed_seconds, 3),
-        }
 
         report["citation_results"].append(result)
         save_report(report)
 
         print(f"[{status}] {item['id']}")
         print(f"Question: {item['question']}")
-        print(f"Status: {response.get('status')} | Citations: {len(citations)}")
+        print(f"Status: {response.get('status')} | Citations: {result['citation_count']}")
         print()
 
     citation_results = report["citation_results"]
