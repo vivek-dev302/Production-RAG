@@ -1,21 +1,53 @@
-name : Production-RAG
+name: production-rag
 
 services:
-
-  qdrant:
-    image: qdrant/qdrant
+  fastapi:
+    image: your-dockerhub-username/production-rag:latest
+    build: .
     ports:
-      - "6333:6333"
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
     volumes:
-      - qdrant_data:/qdrant/storage
+      - rag_data:/app/data
+    depends_on:
+      - redis
+      - qdrant
+    restart: unless-stopped
+
+  worker:
+    image: your-dockerhub-username/production-rag:latest
+    command: rq worker --url redis://redis:6379/0 rag
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
+    volumes:
+      - rag_data:/app/data
+    depends_on:
+      - redis
+      - qdrant
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
 
 volumes:
+  rag_data:
   redis_data:
   qdrant_data:
