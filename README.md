@@ -80,9 +80,9 @@ python -m pytest -q
 The golden dataset is at `data/evaluation/golden_dataset.json`. Run evaluations from the project root:
 
 ```powershell
-python -m app.evaluation.run_retrieval_evaluation
-python -m app.evaluation.run_refusal_evaluation
-python -m app.evaluation.run_citation_evaluation
+python -m evaluation.run_retrieval_evaluation
+python -m evaluation.run_refusal_evaluation
+python -m evaluation.run_citation_evaluation
 ```
 
 The scripts save resumable reports under `data/evaluation/results/`. They use the Gemini API, so run them manually rather than in CI.

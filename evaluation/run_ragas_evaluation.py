@@ -15,9 +15,9 @@ from ragas.metrics._answer_correctness import AnswerCorrectness
 from ragas.metrics._answer_similarity import AnswerSimilarity
 from ragas.metrics._faithfulness import Faithfulness
 
-from app.evaluation.run_citation_evaluation import evaluate_citation_case
-from app.evaluation.run_refusal_evaluation import evaluate_refusal_case
-from app.evaluation.run_retrieval_evaluation import evaluate_retrieval_case
+from evaluation.run_citation_evaluation import evaluate_citation_case
+from evaluation.run_refusal_evaluation import evaluate_refusal_case
+from evaluation.run_retrieval_evaluation import evaluate_retrieval_case
 from app.services.rag import answer_from_chunks, retrieve_chunks
 
 

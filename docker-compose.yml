@@ -2,7 +2,7 @@ name: production-rag
 
 services:
   fastapi:
-    image: your-dockerhub-username/production-rag:latest
+    image: production-rag:latest
     build: .
     ports:
       - "8000:8000"
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: your-dockerhub-username/production-rag:latest
+    image: production-rag:latest
     command: rq worker --url redis://redis:6379/0 rag
     env_file:
       - .env
