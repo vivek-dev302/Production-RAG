@@ -26,6 +26,27 @@ class QueryResponse(BaseModel):
     citations: list[Citation] = []
     is_cited: bool
 
+
+class QueryJobAcceptedResponse(BaseModel):
+    status: Literal["queued"]
+    job_id: str
+
+
+class QueryJobStatusResponse(BaseModel):
+    status: Literal[
+        "queued",
+        "started",
+        "deferred",
+        "scheduled",
+        "finished",
+        "failed",
+        "stopped",
+        "canceled",
+    ]
+    job_id: str
+    result: QueryResponse | None = None
+    detail: str | None = None
+
 class IngestionItem(BaseModel):
     status: Literal[
         "indexed",

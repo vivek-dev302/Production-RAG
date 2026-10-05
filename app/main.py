@@ -1,7 +1,7 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from typing import List, Annotated
 from app.services.ingestion import indexing_documents
-from app.services.rag import ask_documents
+from app.client.rq_client import queue
 from app.services.chunks_registry import create_chunks_table
 from pathlib import Path
 import hashlib
@@ -10,7 +10,8 @@ from app.schemas import (
     DocumentListResponse,
     IngestionResponse,
     QueryRequest,
-    QueryResponse,
+    QueryJobAcceptedResponse,
+    QueryJobStatusResponse,
 )
 
 
@@ -107,6 +108,38 @@ async def ingest_documents(
         "documents": skipped_files + indexing_results
     }
 
-@app.post("/query",response_model=QueryResponse)
+@app.post("/query", response_model=QueryJobAcceptedResponse)
 def ask_query(query: QueryRequest):
-    return ask_documents(query.question)
+    job = queue.enqueue(
+        "app.queues.worker.ask_documents_job",
+        query.question,
+        job_timeout=600,
+        result_ttl=86400,
+    )
+    return {"status": "queued", "job_id": job.id}
+
+
+@app.get("/query/{job_id}", response_model=QueryJobStatusResponse)
+def get_query_result(job_id: str):
+    job = queue.fetch_job(job_id)
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="Query job not found")
+
+    job_status = job.get_status(refresh=True)
+
+    if job_status == "finished":
+        return {
+            "status": "finished",
+            "job_id": job.id,
+            "result": job.return_value(),
+        }
+
+    if job_status == "failed":
+        return {
+            "status": "failed",
+            "job_id": job.id,
+            "detail": "The query job failed. Check the RQ worker logs.",
+        }
+
+    return {"status": job_status, "job_id": job.id}
