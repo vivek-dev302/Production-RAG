@@ -9,14 +9,14 @@ A domain-specific **Ask My Documents** API built with FastAPI. Upload PDF, TXT, 
 - Splits text into token-aware chunks of 650 tokens with 100-token overlap.
 - Stores document and chunk records in SQLite, and embeddings in Qdrant.
 - Uses hybrid retrieval: BM25 keyword search + Qdrant semantic search, then a cross-encoder reranker selects the final top 3 chunks.
-- Generates answers with Gemini, citations, and an insufficient-evidence response when appropriate.
+- Generates answers with a local Ollama model, citations, and an insufficient-evidence response when appropriate.
 - Validates citation snippets against retrieved chunks, including filename and page metadata.
 
 ## Stack
 
 - FastAPI
 - LangChain
-- Gemini embeddings and LLM
+- Local Hugging Face embeddings and an Ollama LLM
 - Qdrant
 - SQLite
 - BM25 (`rank-bm25`)
@@ -31,15 +31,6 @@ Create and activate a virtual environment, then install dependencies:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-Create a `.env` file in the project root:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key
-QDRANT_URL=your_qdrant_url
-QDRANT_API_KEY=your_qdrant_api_key
-QDRANT_COLLECTION=your_collection_name
 ```
 
 Run the API:
@@ -77,15 +68,30 @@ Run unit tests:
 python -m pytest -q
 ```
 
-The golden dataset is at `data/evaluation/golden_dataset.json`. Run evaluations from the project root:
+The golden dataset is at `data/evaluation/golden_dataset.json`. The evaluation-only
+dependencies are deliberately separate from the API/worker image. Install them once,
+then run the single resumable evaluator from the project root:
 
 ```powershell
-python -m evaluation.run_retrieval_evaluation
-python -m evaluation.run_refusal_evaluation
-python -m evaluation.run_citation_evaluation
+pip install -r evaluation/requirements.txt
+python -m evaluation.run_evaluation
 ```
 
-The scripts save resumable reports under `data/evaluation/results/`. They use the Gemini API, so run them manually rather than in CI.
+It uses the same local Ollama model as the RAG application. It runs one retrieval and
+one answer generation per dataset question, then writes separate resumable reports for
+BM25 and semantic retrieval at 6 chunks each, reranked retrieval at 3 chunks, with
+hit-rate and mean-recall metrics, plus citations, refusal, faithfulness, and answer
+correctness under `data/evaluation/results/`.
+
+Run the evaluator against the Dockerized corpus with:
+
+```powershell
+docker compose --profile evaluation run --build --rm evaluation
+```
+
+The service shares the application SQLite/upload volume and the internal Qdrant
+network. The golden dataset and generated reports are bind-mounted from
+`data/evaluation/`, so you can inspect the reports directly on your machine.
 
 ## CI
 

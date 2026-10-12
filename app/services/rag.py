@@ -34,7 +34,7 @@ vector_db = QdrantVectorStore.from_existing_collection(
     collection_name = os.getenv("QDRANT_COLLECTION")
 )
 
-def retrieve_chunks(user_query):
+def retrieve_chunk_sets(user_query):
 
     retrieval_top_k = 6
 
@@ -75,7 +75,15 @@ def retrieve_chunks(user_query):
         top_k=3,
     )
 
-    return top_chunks
+    return {
+        "bm25_chunks": top_bm25_chunks,
+        "semantic_chunks": top_vector_chunks,
+        "reranked_chunks": top_chunks,
+    }
+
+
+def retrieve_chunks(user_query):
+    return retrieve_chunk_sets(user_query)["reranked_chunks"]
 
 def answer_from_chunks(user_query, top_chunks):
     is_cited = False

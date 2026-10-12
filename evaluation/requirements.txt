@@ -1,0 +1,6 @@
+# Evaluation-only dependencies. These are intentionally excluded from the API/worker image.
+# Ragas 0.4.3 has a broken VertexAI import with langchain-community 0.4.2.
+# This pinned upstream commit contains the import fix.
+ragas @ git+https://github.com/GoldSharon/ragas.git@735726d5c29e072b5e4e877759d254f78e0f7c73
+langchain-google-vertexai
+openai

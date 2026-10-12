@@ -44,6 +44,27 @@ services:
       - qdrant
     restart: unless-stopped
 
+  evaluation:
+    image: production-rag-evaluation:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.evaluation
+    profiles: ["evaluation"]
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: llama3.2:3b
+    volumes:
+      - rag_data:/app/data
+      - ./data/evaluation:/app/data/evaluation
+      - huggingface_cache:/root/.cache/huggingface
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - qdrant
+
   redis:
     image: redis:7-alpine
     volumes:
