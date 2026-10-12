@@ -4,11 +4,12 @@ import hashlib
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 from langchain_qdrant import QdrantVectorStore
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.services.bm25_service import find_closest_chunks_bm25
 from app.services.citation_service import verify_citations
 from app.services.reranker_service import rerank_chunks
+from app.services.embeddings import embedding_model
 
 load_dotenv(find_dotenv())
 
@@ -20,21 +21,16 @@ PROMPT_PATH = (
 
 PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8")
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.5-flash",
-    google_api_key=os.getenv("GEMINI_API_KEY"),
+llm = ChatOllama(
+    model=os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
+    base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     temperature=0.2,
-)
-
-embedding_model = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001",
-    google_api_key=os.getenv("GEMINI_API_KEY"),
+    format="json",
 )
 
 vector_db = QdrantVectorStore.from_existing_collection(
     embedding=embedding_model,
     url=os.getenv("QDRANT_URL"),
-    api_key=os.getenv("QDRANT_API_KEY"),
     collection_name = os.getenv("QDRANT_COLLECTION")
 )
 
@@ -47,7 +43,6 @@ def retrieve_chunks(user_query):
     vector_results = vector_db.similarity_search_with_score(
         query=user_query,
         k=retrieval_top_k,
-        score_threshold=0.75
     )
     top_vector_chunks = []
 
@@ -119,10 +114,15 @@ def answer_from_chunks(user_query, top_chunks):
     ]
     for i in range(max_checks):
         ai_response = llm.invoke(messages)
-        response_text = ai_response.text
+        response_text = str(ai_response.content)
 
         try:
             response_dict = json.loads(response_text)
+
+            for citation in response_dict.get("citations", []):
+                if citation.get("page") is not None:
+                    citation["page"] = str(citation["page"])
+
             print(f"Attempt {i+1}: {response_dict['response']}")
             for i, citation in enumerate(response_dict.get('citations', []), start=1):
                 print(f"[{i}]: {citation['snippet']}")

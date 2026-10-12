@@ -3,11 +3,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from app.services.document_registry import add_document, delete_document
 from app.services.chunks_registry import add_chunks, delete_chunks_by_document_id
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from app.services.embeddings import embedding_model
 
 load_dotenv()
 
@@ -16,11 +16,6 @@ text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
     chunk_size = 650,
     chunk_overlap=100 
 )
-embedding_model = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001",
-    google_api_key=os.getenv("GEMINI_API_KEY"),
-)
-
 def load_file(file_path):
     suffix = Path(file_path).suffix.lower()
 
@@ -73,7 +68,6 @@ def indexing_documents(files):
                 documents=chunks,
                 embedding=embedding_model,
                 url=os.getenv("QDRANT_URL"),
-                api_key=os.getenv("QDRANT_API_KEY"),
                 collection_name=os.getenv("QDRANT_COLLECTION")
             )
             

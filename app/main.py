@@ -129,10 +129,16 @@ def get_query_result(job_id: str):
     job_status = job.get_status(refresh=True)
 
     if job_status == "finished":
+        result = job.return_value()
+
+        for citation in result.get("citations", []):
+            if citation.get("page") is not None:
+                citation["page"] = str(citation["page"])
+
         return {
             "status": "finished",
             "job_id": job.id,
-            "result": job.return_value(),
+            "result": result,
         }
 
     if job_status == "failed":
