@@ -19,27 +19,49 @@ A domain-specific **Ask My Documents** API built with FastAPI. Upload PDF, TXT, 
 - Local Hugging Face embeddings and an Ollama LLM
 - Qdrant
 - SQLite
+- Redis and RQ for background query jobs
 - BM25 (`rank-bm25`)
 - Sentence Transformers cross-encoder reranker
-- Pytest and GitHub Actions
+- Docker Compose
 
-## Setup
+## Run locally with Docker
 
-Create and activate a virtual environment, then install dependencies:
+### 1. Prerequisites
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-Run the API:
+Install Docker Desktop and [Ollama](https://ollama.com/). Pull the local model once:
 
 ```powershell
-uvicorn app.main:app --reload
+ollama pull llama3.2:3b
 ```
 
-Open `http://127.0.0.1:8000/docs` to use the Swagger interface.
+Make sure Ollama is running. If the Ollama app is not already serving models:
+
+```powershell
+ollama serve
+```
+
+### 2. Create `.env`
+
+Create a `.env` file in the project root:
+
+```env
+QDRANT_COLLECTION=Production_RAG
+```
+
+### 3. Start the application
+
+```powershell
+docker compose up --build
+```
+
+Docker starts FastAPI, the RQ worker, Redis, and Qdrant. The API is available at
+`http://127.0.0.1:8000/docs`.
+
+Use `docker compose up -d --build` to run it in the background. View worker logs with:
+
+```powershell
+docker compose logs -f worker
+```
 
 ## API usage
 
@@ -48,7 +70,16 @@ Open `http://127.0.0.1:8000/docs` to use the Swagger interface.
 | `GET /health` | Check that the API is running. |
 | `GET /documents` | List indexed documents from SQLite. |
 | `POST /documents/ingest` | Upload one or more PDF, TXT, or Markdown files using the `files` form field. |
-| `POST /query` | Ask a question about indexed documents. |
+| `POST /query` | Queue a question about indexed documents. |
+| `GET /query/{job_id}` | Poll the queued question until it finishes. |
+
+### 1. Upload documents
+
+In Swagger, use `POST /documents/ingest`, click **Try it out**, then upload one or
+more PDF, TXT, or Markdown files through the `files` field. Wait for each document
+to return `status: "indexed"` before querying.
+
+### 2. Ask a question
 
 Example query body:
 
@@ -58,41 +89,46 @@ Example query body:
 }
 ```
 
-The response contains `status`, `response`, `citations`, and `is_cited`. Each citation includes its source title, page, and supporting snippet.
+`POST /query` returns quickly with a job ID:
 
-## Testing and evaluation
+```json
+{
+  "status": "queued",
+  "job_id": "your-job-id"
+}
+```
 
-Run unit tests:
+Use `GET /query/your-job-id` until its status is `finished`. Its `result` contains
+the grounded answer, `is_cited`, and citations with document title, page, and
+supporting snippet.
+
+## Stop or reset
+
+Stop containers while preserving indexed documents, SQLite data, Qdrant vectors, and
+Redis data:
+
+```powershell
+docker compose down
+```
+
+To remove all local Docker data and start again from an empty index:
+
+```powershell
+docker compose down -v
+```
+
+`down -v` permanently deletes the local Qdrant index, uploaded files, SQLite database,
+and Redis data.
+
+## Tests and evaluation
+
+Run unit tests from a local Python environment:
 
 ```powershell
 python -m pytest -q
 ```
 
-The golden dataset is at `data/evaluation/golden_dataset.json`. The evaluation-only
-dependencies are deliberately separate from the API/worker image. Install them once,
-then run the single resumable evaluator from the project root:
-
-```powershell
-pip install -r evaluation/requirements.txt
-python -m evaluation.run_evaluation
-```
-
-It uses the same local Ollama model as the RAG application. It runs one retrieval and
-one answer generation per dataset question, then writes separate resumable reports for
-BM25 and semantic retrieval at 6 chunks each, reranked retrieval at 3 chunks, with
-hit-rate and mean-recall metrics, plus citations, refusal, faithfulness, and answer
-correctness under `data/evaluation/results/`.
-
-Run the evaluator against the Dockerized corpus with:
-
-```powershell
-docker compose --profile evaluation run --build --rm evaluation
-```
-
-The service shares the application SQLite/upload volume and the internal Qdrant
-network. The golden dataset and generated reports are bind-mounted from
-`data/evaluation/`, so you can inspect the reports directly on your machine.
-
-## CI
-
-GitHub Actions runs the unit-test suite for every push and pull request through `.github/workflows/tests.yml`.
+The repository includes a manually curated golden dataset in
+`data/evaluation/golden_dataset.json` and evaluation tooling for retrieval, citation,
+refusal, faithfulness, and answer correctness. No benchmark results are claimed in
+this README.
